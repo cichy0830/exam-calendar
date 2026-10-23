@@ -158,6 +158,8 @@ textarea{width:100%;resize:vertical;line-height:1.5}
 .gbg.hol{background:repeating-linear-gradient(135deg,var(--hol) 0 4px,transparent 4px 7px)}
 .gbg.today{background:var(--today)}
 .gbar{grid-row:1;align-self:center;height:16px;border-radius:3px;margin:0 1px;font-size:.66rem;line-height:16px;padding:0 4px;white-space:nowrap;overflow:hidden;background:hsl(var(--h) var(--chip-s) var(--chip-l));color:hsl(var(--h) var(--chip-fg-s) var(--chip-fg-l));z-index:1}
+.gbar.lane{height:10px;line-height:10px;font-size:.6rem;border-radius:2px}
+.gbar.self{background:transparent;border:1px solid hsl(var(--h) var(--chip-fg-s) var(--chip-fg-l));line-height:8px}
 .gbar.write{background:transparent;border:1px dashed hsl(var(--h) var(--chip-fg-s) var(--chip-fg-l));line-height:14px}
 .gmark{grid-row:1;align-self:center;justify-self:center;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:.66rem;background:hsl(var(--h) var(--chip-fg-s) var(--chip-fg-l));color:var(--surface);z-index:1}
 .gmark.boss{background:var(--danger);border-radius:4px}
@@ -217,15 +219,31 @@ pre.ics{max-height:180px;overflow:auto;font-size:.7rem;background:var(--surface-
 .print-head h1{font-size:16pt}
 .print-bar{display:flex;gap:8px;align-items:center;margin-bottom:12px}
 @page{size:A4 landscape;margin:8mm}
+.print-page{width:281mm;max-width:100%}
+.compact .wcal{min-width:0}
+.compact .wcal td{height:auto;padding:2px 3px}
+.compact .wcal .wz{padding:2px 3px;min-height:0}
+.compact .wcal thead th{padding:3px;font-size:.72rem}
+.compact .chip{font-size:.66rem;line-height:1.2;padding:0 3px;margin-top:1px}
+.compact .chip .tag{font-size:.6rem;padding:0 2px;margin-right:2px}
+.compact .cellsec{font-size:0;margin:2px 0 1px;height:0}
+.compact .wcal .d{font-size:.7rem}
+.compact .wlabel{font-size:.6rem}
+.compact .legend{font-size:.68rem;gap:3px 10px}
+.compact .print-head{margin-bottom:3px}
+.compact .grow-row{min-height:18px}
+.compact .gmark{width:15px;height:15px;font-size:.6rem}
+.compact .ghead .gbg{font-size:.55rem}
+.compact .glabel{font-size:.66rem;padding:2px 4px}
 @media print{
   :root{--bg:#fff;--surface:#fff}
   body{font-size:9pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   #app{max-width:none;padding:0}
   .noprint,.top,.tabs,.print-bar{display:none!important}
-  .print-page{break-after:page}
+  .print-page{break-after:page;width:auto}
   .print-page:last-child{break-after:auto}
   .wcal{min-width:0}
-  .wcal td{height:auto;min-height:15mm}
+  .wcal td{height:auto}
   .scroll{overflow:visible}
   .gantt{min-width:0;width:100%;border-radius:0}
   .glabel{position:static}
@@ -709,7 +727,7 @@ function chip(e){
 function chipInner(e){
   var t=e.text;
   if(e.kind==='note') return '<span class="tag ntag'+(e.who==='student'?' stu':'')+'">'+(e.who==='student'?'學生帶':'老師備')+'</span>'+esc(t);
-  if(e.kind==='open') return '<span class="tag '+uc(e.unit)+'">開放</span>'+esc(t);
+  if(e.kind==='open') return '<span class="tag '+uc(e.unit)+'">開放</span>'+esc(st.mode==='print'?t.replace(/（(\d+\/\d+) 截止）/g,'→$1').replace(/；/g,'、'):t);
   if(e.kind==='due') return '<span class="tag" style="background:var(--danger);color:var(--surface)">截止</span>'+esc(t.replace(' 截止：','：'));
   return esc(t);
 }
@@ -723,9 +741,12 @@ function chipOld(e){
 function e0(evs,sa,su){return evs.some(function(e){return e.kind==='write'&&e.date===su;})?su:sa;}
 function weekNo(cal,mon){ if(!isDate(cal.semStart)) return null; return Math.floor(diff(monday(cal.semStart),mon)/7)+1; }
 function weekTable(cal,S,weeks){
-  var days=cal.classDays||[1,2,4,5], today=todayStr();
+  var days=cal.classDays||[1,2,4,5], today=st.mode==='print'?'':todayStr();
   var mons=weeks; if(!mons){mons=[];for(var m=monday(S.range.from);m<=monday(S.range.to);m=add(m,7)) mons.push(m);}
-  var h='<table class="wcal"><colgroup><col style="width:52px">'+'<col><col><col><col><col><col style="width:13%">'+'</colgroup><thead><tr><th>週次</th>'+[1,2,3,4,5].map(function(n){return '<th>星期'+WK[n]+(days.indexOf(n)<0?' <span class="muted" style="font-weight:400">（無課）</span>':'')+'</th>';}).join('')+'<th>週末</th></tr></thead><tbody>';
+  // 有課的日子欄位寬、沒課的星期三與週末窄
+  var wts=[0.55].concat([1,2,3,4,5].map(function(n){return days.indexOf(n)>=0?3:1.2;})).concat([1.5]);
+  var tot=wts.reduce(function(a,b){return a+b;},0);
+  var h='<table class="wcal"><colgroup>'+wts.map(function(w){return '<col style="width:'+(w/tot*100).toFixed(2)+'%">';}).join('')+'</colgroup><thead><tr><th>週次</th>'+[1,2,3,4,5].map(function(n){return '<th>'+(days.indexOf(n)<0?'週'+WK[n]+'<span class="muted" style="font-weight:400">（無課）</span>':'星期'+WK[n])+'</th>';}).join('')+'<th>週末</th></tr></thead><tbody>';
   mons.forEach(function(mon){
     var wn=weekNo(cal,mon);
     h+='<tr><th class="wk">'+(wn?'第<b>'+wn+'</b>週':'<b>'+md(mon)+'</b>起')+'</th>';
@@ -761,7 +782,7 @@ function dayCell(cal,S,d,isClass,today){
 
 /* ---------- gantt ---------- */
 function ganttLegend(){
-  return '<div class="legend"><span><span class="gbar write u0"></span>預習筆記（交代→繳交）</span><span><span class="gmark submit u0">交</span>繳交預習</span>'+['訂正','概念釐清','分組挑戰','實驗','競賽之盾'].map(function(k){return '<span><span class="gmark u0">'+abbr(k)+'</span>'+lbl(k)+'</span>';}).join('')+'<span><span class="gmark fixed">固</span>固定課</span>'+'<span><span class="gbar u0"></span>線上任務開放期間</span><span><span class="gmark boss">魔</span>魔王挑戰</span><span><span class="gmark exam">考</span>段考</span></div>';
+  return '<div class="legend"><span><span class="gbar write u0"></span>預習筆記（交代→繳交）</span><span><span class="gmark submit u0">交</span>繳交預習</span>'+['訂正','概念釐清','分組挑戰','實驗','競賽之盾'].map(function(k){return '<span><span class="gmark u0">'+abbr(k)+'</span>'+lbl(k)+'</span>';}).join('')+'<span><span class="gmark fixed">固</span>固定課</span>'+'<span><span class="gbar u0"></span>線上作業開放期間（標示截止日）</span><span><span class="gbar self u0"></span>預習期間的自主學習作業</span><span><span class="gmark boss">魔</span>魔王挑戰</span><span><span class="gmark exam">考</span>段考</span></div>';
 }
 function gantt(cal,S,forPrint){
   var from=S.range.from,to=S.range.to,N=diff(from,to)+1,today=todayStr();
@@ -772,7 +793,7 @@ function gantt(cal,S,forPrint){
   var row=function(label,cls,items){return '<div class="grow-row '+cls+'" style="'+tmpl+'"><div class="glabel">'+label+'</div>'+bg()+items+'</div>';};
   var h='<div class="gantt" style="'+tmpl+'">';
   // header
-  var hd='';for(var k=0;k<N;k++){var d=add(from,k);hd+='<div class="gbg'+((dow(d)%6===0)?' we':'')+(S.hol[d]?' hol':'')+'" style="grid-column:'+(k+2)+'">'+((k===0||P(d).getUTCDate()===1||dow(d)===1)?'<b>'+md(d)+'</b>':'<b>'+P(d).getUTCDate()+'</b>')+WK[dow(d)]+'</div>';}
+  var hd='';for(var k=0;k<N;k++){var d=add(from,k);hd+='<div class="gbg'+((dow(d)%6===0)?' we':'')+(S.hol[d]?' hol':'')+'" style="grid-column:'+(k+2)+'">'+((k===0||P(d).getUTCDate()===1||(!forPrint&&dow(d)===1))?'<b>'+(forPrint?(P(d).getUTCMonth()+1)+'/<br>'+P(d).getUTCDate():md(d))+'</b>':'<b>'+P(d).getUTCDate()+'</b>')+WK[dow(d)]+'</div>';}
   h+='<div class="grow-row ghead" style="'+tmpl+'"><div class="glabel muted">單元 / 日期</div>'+hd+'</div>';
   S.units.forEach(function(r){
     var u=cal.units[r.i], c=uc(r.i), it='';
@@ -780,10 +801,15 @@ function gantt(cal,S,forPrint){
     if(r.dates['預習']) it+='<div class="gmark submit '+c+'" style="grid-column:'+col(r.dates['預習'])+'" title="繳交預習 '+mdw(r.dates['預習'])+'">交</div>';
     stepsOf(u).forEach(function(s){var d=r.dates[s]; if(d) it+='<div class="gmark '+c+'" style="grid-column:'+col(d)+'" title="'+esc(lbl(s)+' '+mdw(d))+'">'+abbr(s)+'</div>';});
     h+=row('<span class="tag '+c+'">'+esc(r.code)+'</span>'+esc(r.name),'unit-row',it);
-    r.online.forEach(function(o){
-      var a=col(o.open), b=col(o.due)+1; if(b<=a) b=a+1;
-      h+=row(esc(o.name),'sub','<div class="gbar '+c+'" style="grid-column:'+a+'/'+b+'" title="'+esc(o.name+' '+md(o.open)+'–'+md(o.due))+'">'+esc(md(o.open)+'–'+md(o.due))+'</div>');
-    });
+    // 線上作業：同一列，時間重疊的才往下疊
+    if(r.online.length){
+      var lanes=[], bars=r.online.slice().sort(function(x,y){return x.open<y.open?-1:x.open>y.open?1:0;}).map(function(o){
+        var L=0; while(lanes[L]&&lanes[L]>=o.open) L++; lanes[L]=o.due; return {o:o,L:L}; });
+      var nL=lanes.length;
+      var it2=bars.map(function(x){ var o=x.o, a=col(o.open), b=col(o.due)+1; if(b<=a) b=a+1;
+        return '<div class="gbar lane '+c+(o.self?' self':'')+'" style="grid-column:'+a+'/'+b+';align-self:start;margin-top:'+(2+x.L*11)+'px" title="'+esc(o.name+' '+md(o.open)+'–'+md(o.due))+'">'+esc(o.name)+' '+esc(md(o.due))+'</div>'; }).join('');
+      h+='<div class="grow-row sub" style="'+tmpl+';min-height:'+(4+nL*11)+'px"><div class="glabel">線上作業</div>'+bg()+it2+'</div>';
+    }
   });
   var fixedEv=S.events.filter(function(e){return e.kind==='fixed'&&e.date>=from&&e.date<=to;});
   if(fixedEv.length) h+=row('<b>固定課</b>','unit-row',fixedEv.map(function(e){return '<div class="gmark fixed" style="grid-column:'+col(e.date)+'" title="'+esc(e.text+' '+mdw(e.date))+'">'+esc(abbr(e.text))+'</div>';}).join(''));
@@ -859,17 +885,28 @@ function renderPrint(){
   document.documentElement.setAttribute('data-theme','light');
   var cal=EMBED.cal, S=schedule(cal);
   if(!S.ok){app.innerHTML='<div class="notice">'+esc(S.error)+'</div>';return;}
-  var mons=[];for(var m=monday(S.range.from);m<=monday(S.range.to);m=add(m,7)) mons.push(m);
-  var per=5, pages=[]; for(var i=0;i<mons.length;i+=per) pages.push(mons.slice(i,i+per));
+  var mons=[];for(var m=monday(S.range.first);m<=monday(S.range.to);m=add(m,7)) mons.push(m);
+  var pages=[mons];
   var head=function(sub){return '<div class="print-head"><div><div class="small muted">自然科'+(cal.grade?'．'+esc(cal.grade):'')+'．'+esc(sub)+'</div><h1>'+esc(cal.title)+'</h1></div><div class="small muted num">'+mdw(S.range.first)+' – '+mdw(S.examEnd)+'　'+esc(cal.examName||'段考')+' '+mdw(cal.examStart)+'</div></div>';};
   var h='<div class="print-bar noprint"><button class="btn primary" id="doPrint">列印 / 存成 PDF</button><span class="small muted">紙張請選 A4、橫向，並勾選「背景圖形」。</span></div>';
-  pages.forEach(function(ws,pi){h+='<section class="print-page">'+head('學習週曆'+(pages.length>1?'（'+(pi+1)+'/'+pages.length+'）':''))+legend()+'<div style="height:4px"></div>'+weekTable(cal,S,ws)+'</section>';});
-  h+='<section class="print-page">'+head('進度甘特圖')+ganttLegend()+'<div style="height:6px"></div>'+gantt(cal,S,true)+'</section>';
+  pages.forEach(function(ws,pi){h+='<section class="print-page compact">'+head('學習週曆'+(pages.length>1?'（'+(pi+1)+'/'+pages.length+'）':''))+legend()+'<div style="height:4px"></div>'+weekTable(cal,S,ws)+'</section>';});
+  h+='<section class="print-page compact">'+head('進度甘特圖')+ganttLegend()+'<div style="height:6px"></div>'+gantt(cal,S,true)+'</section>';
   app.innerHTML=h;
-  document.getElementById('doPrint').onclick=function(){window.print();};
-  setTimeout(function(){try{window.print();}catch(e){}},700);
+  document.getElementById('doPrint').onclick=function(){ fitPages(); window.print(); };
+  window.addEventListener('beforeprint',fitPages);
+  setTimeout(fitPages,50);
+  var go=function(){ fitPages(); try{window.print();}catch(e){} };
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(function(){ setTimeout(go,300); }); else setTimeout(go,800);
 }
 
+/* 每一頁縮放到剛好放進 A4 橫式（281mm × 194mm 可印範圍） */
+function fitPages(){
+  var mm=96/25.4, H=192*mm;
+  document.querySelectorAll('.print-page').forEach(function(pg){
+    pg.style.zoom=''; var h=pg.scrollHeight; var z=Math.min(1,H/h);
+    if(z<1) pg.style.zoom=z.toFixed(3);
+  });
+}
 /* ---------- standalone export ---------- */
 function standaloneHTML(cal,mode){
   var css=document.getElementById('app-css').textContent, js=document.getElementById('app-js').textContent;
