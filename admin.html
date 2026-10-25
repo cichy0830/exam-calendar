@@ -460,7 +460,7 @@ function scheduleCore(cal){
     var shield=r.dates['競賽之盾'], open=r.dates['訂正'];
     if(shield&&open&&diff(open,shield)<minDays+1&&isDate(ov[r.i+':競賽之盾'])) res.warnings.push(r.code+' 的線上作業只開放 '+Math.max(0,diff(open,shield)-1)+' 天，少於設定的 '+minDays+' 天。');
     (cal.online||[]).forEach(function(p,pi){
-      if(!p.name) return;
+      if(!p.name||p.paused) return;
       var due=ov[r.i+':on'+pi];
       var op=open;
       if(p.rule==='preview'){ op=r.write&&r.write.start; if(!isDate(due)) due=open?add(open,-1):r.dates['預習']; if(op&&due<op) due=op; }
@@ -664,7 +664,7 @@ function viewSetup(cal,S){
     +'<label class="field" style="flex-direction:row;align-items:center;gap:6px;padding-bottom:6px"><input type="checkbox" id="f_mergeGroup"'+(cal.mergeGroup===false?'':' checked')+'><span>節數不夠時，分組挑戰可跨章節合併</span></label>'
     +'<label class="field" style="width:170px"><span>因材網／PaGamO 至少開放（天）</span><input type="number" id="f_minDays" data-k="minDays" min="0" max="21" step="1" value="'+(cal.minDays!=null&&cal.minDays!==''?cal.minDays:7)+'"></label></div>';
   h+='<div class="row">'+['訂正','概念釐清','分組挑戰','實驗','競賽之盾'].map(function(k){return '<label class="field" style="width:96px"><span>'+lbl(k)+'（節）</span><input type="number" id="w_'+k+'" data-w="'+k+'" min="0.25" max="2" step="0.25" value="'+((cal.weights||{})[k]!=null?cal.weights[k]:1)+'"></label>';}).join('')+'</div>';
-  h+='<div class="stack">'+(cal.online||[]).map(function(p,pi){return '<div class="row"><label class="field grow"><span>線上平台 '+(pi+1)+'</span><input type="text" id="on'+pi+'" data-on="'+pi+'" value="'+esc(p.name)+'"></label><label class="field"><span>截止</span><select id="onr'+pi+'" data-onr="'+pi+'">'+Object.keys(RULES).map(function(k){return '<option value="'+k+'"'+((p.rule||'shield')===k?' selected':'')+'>'+RULES[k]+'</option>';}).join('')+'</select></label><button class="btn ghost danger" data-onrm="'+pi+'" aria-label="刪除平台">✕</button></div>';}).join('')+'<div><button class="btn" id="addOn">＋ 新增平台</button></div></div>';
+  h+='<div class="stack">'+(cal.online||[]).map(function(p,pi){return '<div class="row"><label class="field grow"><span>線上平台 '+(pi+1)+'</span><input type="text" id="on'+pi+'" data-on="'+pi+'" value="'+esc(p.name)+'"></label><label class="field"><span>截止</span><select id="onr'+pi+'" data-onr="'+pi+'">'+Object.keys(RULES).map(function(k){return '<option value="'+k+'"'+((p.rule||'shield')===k?' selected':'')+'>'+RULES[k]+'</option>';}).join('')+'</select></label><label class="field" style="flex-direction:row;align-items:center;gap:4px;padding-bottom:6px"><input type="checkbox" id="onp'+pi+'" data-onp="'+pi+'"'+(p.paused?' checked':'')+'><span>暫停</span></label><button class="btn ghost danger" data-onrm="'+pi+'" aria-label="刪除平台">✕</button></div>';}).join('')+'<div><button class="btn" id="addOn">＋ 新增平台</button></div></div>';
   h+='</div></details>';
   if(st.mode==='app') h+='<div class="row" style="justify-content:flex-end">'+(st.confirmDel?'<span class="small">確定刪除這份行事曆？</span><button class="btn" id="delNo">取消</button><button class="btn danger" id="delYes">刪除</button>':'<button class="btn danger" id="delCal">刪除這份行事曆</button>')+'</div>';
   h+='</section><aside class="stack" id="setupSide">'+setupSide(cal,S)+'</aside></div>';
@@ -1019,7 +1019,12 @@ function bindView(tab,cal,S){
     v.querySelectorAll('[data-w]').forEach(function(el){el.addEventListener('change',function(){var n=parseFloat(el.value);if(n>0){cal.weights=cal.weights||{};cal.weights[el.dataset.w]=n;render();}});});
     v.querySelectorAll('[data-on]').forEach(function(el){el.addEventListener('input',function(){cal.online[+el.dataset.on].name=el.value;refreshSoft();});});
     v.querySelectorAll('[data-onr]').forEach(function(el){el.onchange=function(){cal.online[+el.dataset.onr].rule=el.value;render();};});
-    v.querySelectorAll('[data-onrm]').forEach(function(el){el.onclick=function(){cal.online.splice(+el.dataset.onrm,1);cal.overrides={};render();toast('已刪除平台，並清除線上任務的手動調整');};});
+    v.querySelectorAll('[data-onp]').forEach(function(el){el.onchange=function(){ cal.online[+el.dataset.onp].paused=el.checked; render(); toast(el.checked?'已暫停，行事曆上不再顯示這個平台':'已恢復這個平台'); };});
+    v.querySelectorAll('[data-onrm]').forEach(function(el){el.onclick=function(){
+      // 只清掉這個平台的截止日調整，後面平台的編號往前移；其他手動調整都保留
+      var k=+el.dataset.onrm, o=cal.overrides||{}, n={};
+      Object.keys(o).forEach(function(key){ var m=key.match(/^(\d+):on(\d+)$/); if(!m){ n[key]=o[key]; return; } var q=+m[2]; if(q===k) return; n[m[1]+':on'+(q>k?q-1:q)]=o[key]; });
+      cal.online.splice(k,1); cal.overrides=n; render(); toast('已刪除平台');};});
     var ao=$('addOn'); if(ao) ao.onclick=function(){cal.online=cal.online||[];cal.online.push({name:'新平台',rule:'shield'});render();};
     v.querySelectorAll('[data-mv]').forEach(function(el){el.onclick=function(){var i=+el.dataset.mv,j=i+(+el.dataset.dir),U=cal.units;var t=U[i];U[i]=U[j];U[j]=t;shiftOv(cal,'swap',i,j);render();};});
     v.querySelectorAll('[data-join]').forEach(function(el){el.onclick=function(){ var u=cal.units[+el.dataset.join], a=el.dataset.act; u.joinNext=(u.joinNext||[]).slice(); var k=u.joinNext.indexOf(a); if(k>=0) u.joinNext.splice(k,1); else u.joinNext.push(a); render(); };});
