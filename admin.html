@@ -71,6 +71,8 @@ textarea{width:100%;resize:vertical;line-height:1.5}
 .unit .ord{display:flex;gap:2px}
 .unit .mergebar{grid-column:1/-1;display:flex;gap:14px;margin-top:-2px}
 .unit .mergebar:empty{display:none}
+.unit .nr{display:inline-flex;align-items:center;gap:4px}
+.unit .nr input{width:120px;font-size:.8rem;padding:2px 6px}
 .jointog{font-size:.74rem;border:1px dashed var(--line);background:transparent;border-radius:999px;padding:0 8px;color:var(--muted)}
 .jointog.on{border-style:solid;border-color:var(--accent);color:var(--accent);font-weight:700}
 .unit .mergebar{align-items:center;flex-wrap:wrap}
@@ -477,11 +479,14 @@ function scheduleCore(cal){
   var E=res.events, merged={};
   res.units.forEach(function(r){
     var u=r.i;
-    if(r.write&&r.dates['預習']) E.push({date:r.write.start,end:r.write.end,kind:'write',unit:u,text:r.code+' 預習筆記（'+md(r.dates['預習'])+' 繳交）'});
-    if(r.dates['預習']) E.push({date:r.dates['預習'],kind:'submit',unit:u,keys:[u+':預習'],text:r.code+' 繳交預習筆記'});
+    // 預習筆記的範圍可以和單元（線上作業）的切法不同，例如筆記 4-1～4-2.1、作業 4-1
+    var nr=String((cal.units[u]||{}).noteRange||'').trim()||r.code;
+    if(r.write&&r.dates['預習']) E.push({date:r.write.start,end:r.write.end,kind:'write',unit:u,text:nr+' 預習筆記（'+md(r.dates['預習'])+' 繳交）'});
+    if(r.dates['預習']) E.push({date:r.dates['預習'],kind:'submit',unit:u,keys:[u+':預習'],text:nr+' 繳交預習筆記'});
     stepsOf(cal.units[u]).forEach(function(s){ var dd=r.dates[s]; if(!dd) return;
-      var k=dd+'|'+s+'|'+res.grp(u,s); if(merged[k]){ merged[k].codes.push(r.code); merged[k].units.push(u); merged[k].keys.push(u+':'+s); merged[k].text=merged[k].codes.join('、')+' '+lbl(s); return; }
-      var ev={date:dd,kind:'class',unit:u,units:[u],codes:[r.code],keys:[u+':'+s],step:s,text:r.code+' '+lbl(s)}; merged[k]=ev; E.push(ev); });
+      var k=dd+'|'+s+'|'+res.grp(u,s); if(merged[k]){ merged[k].codes.push(s==='訂正'?nr:r.code); merged[k].units.push(u); merged[k].keys.push(u+':'+s); merged[k].text=merged[k].codes.join('、')+' '+lbl(s); return; }
+      var cd=(s==='訂正')?nr:r.code;
+      var ev={date:dd,kind:'class',unit:u,units:[u],codes:[cd],keys:[u+':'+s],step:s,text:cd+' '+lbl(s)}; merged[k]=ev; E.push(ev); });
     var byDue={}; r.online.forEach(function(o){(byDue[o.due]=byDue[o.due]||[]).push(o.name);});
     var byOpen={}; r.online.forEach(function(o){ (byOpen[o.open]=byOpen[o.open]||[]).push(o); });
     Object.keys(byOpen).forEach(function(od){ var grpd={}; byOpen[od].forEach(function(o){ (grpd[o.due]=grpd[o.due]||[]).push(o.name); });
@@ -653,7 +658,7 @@ function viewSetup(cal,S){
       +'<span class="addact">'+ACTS.filter(function(a){return acts.indexOf(a)<0;}).map(function(a){return '<button data-actadd="'+i+'" data-act="'+a+'">＋'+a+'</button>';}).join('')
       +'<input type="text" id="ux'+i+'" data-actin="'+i+'" placeholder="＋自訂活動" aria-label="自訂活動名稱"></span></div>';
     h+='<div class="ord"><button class="btn ghost" data-mv="'+i+'" data-dir="-1" aria-label="上移"'+(i===0?' disabled':'')+'>↑</button><button class="btn ghost" data-mv="'+i+'" data-dir="1" aria-label="下移"'+(i===cal.units.length-1?' disabled':'')+'>↓</button><button class="btn ghost danger" data-rm="'+i+'" aria-label="刪除單元">✕</button></div>'
-      +'<div class="mergebar">'+(function(){ if(i>=cal.units.length-1) return ''; var nx=cal.units[i+1]; var common=(u.acts||[]).filter(function(a){return (nx.acts||[]).indexOf(a)>=0;}); if(!common.length) return ''; return '<span class="small muted">與 '+esc(nx.code||'下一單元')+' 一起上：</span>'+common.map(function(a){var on=(u.joinNext||[]).indexOf(a)>=0; return '<button class="jointog'+(on?' on':'')+'" data-join="'+i+'" data-act="'+esc(a)+'" aria-pressed="'+on+'">'+esc(a)+'</button>';}).join(''); })()+(i<cal.units.length-1?'<button class="linkbtn" data-merge="'+i+'">↧ 與下一節合併</button>':'')+(/[、,，]/.test(u.code||'')?'<button class="linkbtn" data-split="'+i+'">拆成單獨小節</button>':'')+'</div></div>';
+      +'<div class="mergebar"><label class="small muted nr">預習範圍 <input type="text" id="nr'+i+'" data-nr="'+i+'" value="'+esc(u.noteRange||'')+'" placeholder="同單元"></label>'+(function(){ if(i>=cal.units.length-1) return ''; var nx=cal.units[i+1]; var common=(u.acts||[]).filter(function(a){return (nx.acts||[]).indexOf(a)>=0;}); if(!common.length) return ''; return '<span class="small muted">與 '+esc(nx.code||'下一單元')+' 一起上：</span>'+common.map(function(a){var on=(u.joinNext||[]).indexOf(a)>=0; return '<button class="jointog'+(on?' on':'')+'" data-join="'+i+'" data-act="'+esc(a)+'" aria-pressed="'+on+'">'+esc(a)+'</button>';}).join(''); })()+(i<cal.units.length-1?'<button class="linkbtn" data-merge="'+i+'">↧ 與下一節合併</button>':'')+(/[、,，]/.test(u.code||'')?'<button class="linkbtn" data-split="'+i+'">拆成單獨小節</button>':'')+'</div></div>';
   });
   h+='</div><div><button class="btn" id="addUnit">＋ 新增單元</button></div></div>';
   h+='<label class="field"><span>放假日（一行一筆；可寫 9/25 中秋節、10/9~10/10 國慶連假）</span><textarea id="f_holidays" data-k="holidays" rows="4" placeholder="9/25 中秋節">'+esc(cal.holidays)+'</textarea></label>';
@@ -1027,6 +1032,7 @@ function bindView(tab,cal,S){
       cal.online.splice(k,1); cal.overrides=n; render(); toast('已刪除平台');};});
     var ao=$('addOn'); if(ao) ao.onclick=function(){cal.online=cal.online||[];cal.online.push({name:'新平台',rule:'shield'});render();};
     v.querySelectorAll('[data-mv]').forEach(function(el){el.onclick=function(){var i=+el.dataset.mv,j=i+(+el.dataset.dir),U=cal.units;var t=U[i];U[i]=U[j];U[j]=t;shiftOv(cal,'swap',i,j);render();};});
+    v.querySelectorAll('[data-nr]').forEach(function(el){el.addEventListener('input',function(){ cal.units[+el.dataset.nr].noteRange=el.value; refreshSoft(); }); el.addEventListener('change',function(){ render(); });});
     v.querySelectorAll('[data-join]').forEach(function(el){el.onclick=function(){ var u=cal.units[+el.dataset.join], a=el.dataset.act; u.joinNext=(u.joinNext||[]).slice(); var k=u.joinNext.indexOf(a); if(k>=0) u.joinNext.splice(k,1); else u.joinNext.push(a); render(); };});
     v.querySelectorAll('[data-merge]').forEach(function(el){el.onclick=function(){
       var i=+el.dataset.merge, a=cal.units[i], b=cal.units[i+1];
