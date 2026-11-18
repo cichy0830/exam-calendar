@@ -259,7 +259,9 @@ pre.ics{max-height:180px;overflow:auto;font-size:.7rem;background:var(--surface-
 var EMBED = (typeof window!=='undefined' && window.__EMBED__) || null;
 var SITE = (typeof window!=='undefined' && window.__SITE__) || null;  // GitHub Pages 版：{role:'student'|'teacher', repo:'帳號/儲存庫', branch:'main', path:'data/calendars.json'}
 var ACTS = ['概念釐清','分組挑戰','實驗'];
-function lbl(s){ return s==='訂正'?'筆記訂正':s; }
+var LBL_FIX='筆記訂正', LBL_PRE='';
+function setLabels(cal){ LBL_FIX=String((cal&&cal.fixLabel)||'').trim()||'筆記訂正'; LBL_PRE=String((cal&&cal.previewLabel)||'').trim(); }
+function lbl(s){ return s==='訂正'?LBL_FIX:s; }
 var ABBR = {'訂正':'訂','概念釐清':'概','分組挑戰':'分','實驗':'實','競賽之盾':'盾'};
 var WK = ['日','一','二','三','四','五','六'];
 var RULES = {shield:'競賽之盾前一天', preExam:'段考前一天', exam:'段考當天', preview:'預習期間（筆記訂正前完成）'};
@@ -331,6 +333,7 @@ function parseFixed(text,anchor){
 /* 節數不夠時：把相鄰單元的分組挑戰合併成同一節（跨章節），直到排得下或無法再改善 */
 function missingCount(S){ var n=0; (S.units||[]).forEach(function(r){ n+=(r.missing||[]).length+(r.dates['預習']?0:1); }); (S.warnings||[]).forEach(function(w){ if(/順序顛倒|要分開上/.test(w)) n+=1; }); return n; }
 function schedule(cal){
+  setLabels(cal);
   var S=scheduleCore(cal);
   if(!S.ok||cal.mergeGroup===false||!missingCount(S)) return S;
   var G='分組挑戰', ov0=cal.overrides||{}, joins=[], used2={}, merged=[];
@@ -481,8 +484,8 @@ function scheduleCore(cal){
     var u=r.i;
     // 預習筆記的範圍可以和單元（線上作業）的切法不同，例如筆記 4-1～4-2.1、作業 4-1
     var nr=String((cal.units[u]||{}).noteRange||'').trim()||r.code;
-    if(r.write&&r.dates['預習']) E.push({date:r.write.start,end:r.write.end,kind:'write',unit:u,text:nr+' 預習筆記（'+md(r.dates['預習'])+' 繳交）'});
-    if(r.dates['預習']) E.push({date:r.dates['預習'],kind:'submit',unit:u,keys:[u+':預習'],text:nr+' 繳交預習筆記'});
+    if(r.write&&r.dates['預習']) E.push({date:r.write.start,end:r.write.end,kind:'write',unit:u,text:LBL_PRE?(nr+' '+LBL_PRE+'（'+md(r.dates['預習'])+' 前完成）'):(nr+' 預習筆記（'+md(r.dates['預習'])+' 繳交）')});
+    if(r.dates['預習']) E.push({date:r.dates['預習'],kind:'submit',unit:u,keys:[u+':預習'],text:LBL_PRE?(nr+' 完成'+LBL_PRE):(nr+' 繳交預習筆記')});
     stepsOf(cal.units[u]).forEach(function(s){ var dd=r.dates[s]; if(!dd) return;
       var k=dd+'|'+s+'|'+res.grp(u,s); if(merged[k]){ merged[k].codes.push(s==='訂正'?nr:r.code); merged[k].units.push(u); merged[k].keys.push(u+':'+s); merged[k].text=merged[k].codes.join('、')+' '+lbl(s); return; }
       var cd=(s==='訂正')?nr:r.code;
@@ -649,6 +652,8 @@ function viewSetup(cal,S){
   h+='<div class="row"><label class="field"><span>第一單元預習繳交週（該週任一天）</span><input type="date" id="f_start" data-k="start" value="'+esc(cal.start)+'"></label>';
   h+='<label class="field"><span>開學日（用來標示第幾週，可留空）</span><input type="date" id="f_semStart" data-k="semStart" value="'+esc(cal.semStart||'')+'"></label></div>';
   h+='<label class="field"><span>段考後第一節的活動（重新分組；留空表示不安排）</span><input type="text" id="f_kickoff" data-k="kickoff" value="'+esc(cal.kickoff==null?'求職活動':cal.kickoff)+'" placeholder="求職活動"></label>';
+  h+='<label class="field"><span>「筆記訂正」這一節的名稱（例如：網頁課；留空＝筆記訂正）</span><input type="text" data-k="fixLabel" value="'+esc(cal.fixLabel||'')+'" placeholder="筆記訂正"></label>';
+  h+='<label class="field"><span>課前預習的名稱（例如：因材網影片預習；留空＝預習筆記）</span><input type="text" data-k="previewLabel" value="'+esc(cal.previewLabel||'')+'" placeholder="預習筆記"></label>';
   h+='<div class="field"><span>自然課上課日</span><div class="days" role="group" aria-label="上課日">'+[1,2,3,4,5,6].map(function(n){var on=d.indexOf(n)>=0;return '<label class="'+(on?'on':'')+'"><input type="checkbox" id="day'+n+'" data-day="'+n+'"'+(on?' checked':'')+'>'+WK[n]+'</label>';}).join('')+'</div></div>';
   h+='<div class="field"><span>單元（依上課順序）。筆記訂正→活動→競賽之盾；合併進行的單元可寫成「2-1、2-2」</span><div class="units">';
   (cal.units||[]).forEach(function(u,i){
@@ -867,7 +872,7 @@ function viewStudent(cal,S){
 }
 function stepHint(s,tmr){
   if(s==='競賽之盾') return tmr?'記得複習，明天比賽':'單元總結競賽';
-  if(s==='訂正') return '帶預習筆記';
+  if(s==='訂正') return LBL_PRE?'':'帶預習筆記';
   if(s==='實驗') return tmr?'記得帶實驗紀錄本':'';
   return '';
 }
